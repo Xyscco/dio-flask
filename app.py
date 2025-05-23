@@ -1,13 +1,26 @@
 from flask import Flask, request
 from flask_restful import Resource, Api
-from models import Pessoas, Atividades
+from models import Pessoas, Atividades, Usuarios
+from flask_httpauth import HTTPBasicAuth
 
 
+auth = HTTPBasicAuth()
 app = Flask(__name__)
 api = Api(app)
 
+@auth.verify_password
+def verifica_usuario(login, senha):
+    if not (login, senha):
+        return False
+    return Usuarios.query.filter_by(login=login, senha=senha).first()
+    # usuario = Usuarios.query.filter_by(login=login).first()
+    # if usuario and usuario.senha == senha:
+    #     return True
+    # return False
 
 class Pessoa(Resource):
+
+    @auth.login_required
     def get(self, nome):
         try:
             pessoa = Pessoas.query.filter_by(nome=nome).first()
@@ -24,7 +37,9 @@ class Pessoa(Resource):
 
         except Exception as e:
             return {'message': str(e)}, 500
-        
+
+    
+    @auth.login_required    
     def put(self, nome):
         try:
             pessoa = Pessoas.query.filter_by(nome=nome).first()
@@ -48,6 +63,7 @@ class Pessoa(Resource):
         except Exception as e:
             return {'message': str(e)}, 500
         
+    @auth.login_required
     def delete(self, nome):
         try:
             pessoa = Pessoas.query.filter_by(nome=nome).first()
@@ -60,6 +76,8 @@ class Pessoa(Resource):
             return {'message': str(e)}, 500
         
 class ListarInserirPessoas(Resource):
+
+    @auth.login_required
     def get(self):
         try:
             pessoas = Pessoas.query.all()
@@ -74,6 +92,7 @@ class ListarInserirPessoas(Resource):
         except Exception as e:
             return {'message': str(e)}, 500
         
+    @auth.login_required
     def post(self):
         try:
             dados = request.json
@@ -91,6 +110,8 @@ class ListarInserirPessoas(Resource):
         return response
     
 class Atividades(Resource):
+
+    @auth.login_required
     def get(self):
         try:
             atividades = Atividades.query.all()
@@ -99,6 +120,7 @@ class Atividades(Resource):
         except Exception as e:
             return {'message': str(e)}, 500
 
+    @auth.login_required
     def post(self):
         try:
             dados = request.json
@@ -115,9 +137,60 @@ class Atividades(Resource):
 
         return response
     
+class Usuario(Resource):
+    def post(self):
+        try:
+            dados = request.json
+            usuario = Usuarios(login=dados['login'], senha=dados['senha'])
+            usuario.save()
+            response = {
+                'id': usuario.id,
+                'login': usuario.login
+            }, 201
+        except Exception as e:
+            return {'message': str(e)}, 500
+
+        return response
+    
+    
+class UpdateUsuario(Resource):
+    
+    def put(self, login):
+        try:
+            usuario = Usuarios.query.filter_by(login=login).first()
+            if usuario:
+                dados = request.json
+                if 'senha' in dados:
+                    usuario.senha = dados['senha']
+                usuario.save()
+                return {
+                    'id': usuario.id,
+                    'login': usuario.login
+                }, 200
+            else:
+                return {'message': 'Usuário não encontrado'}, 404
+        except Exception as e:
+            return {'message': str(e)}, 500
+        
+        
+    def delete(self, login):
+        try:
+            usuario = Usuarios.query.filter_by(login=login).first()
+            if usuario:
+                usuario.delete()
+                return {'message': 'Usuário excluído com sucesso'}, 200
+            else:
+                return {'message': 'Usuário não encontrado'}, 404
+        except Exception as e:
+            return {'message': str(e)}, 500
+        
+
+    
 api.add_resource(Pessoa, '/pessoa/<string:nome>')
 api.add_resource(ListarInserirPessoas, '/pessoas')
 api.add_resource(Atividades, '/atividades')
+api.add_resource(Usuario, '/usuarios')
+api.add_resource(UpdateUsuario, '/usuario/<string:login>')
 
 if __name__ == '__main__':
     app.run(debug=True)
